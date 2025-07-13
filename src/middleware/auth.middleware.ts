@@ -1,37 +1,42 @@
 import { Request, Response, NextFunction } from 'express';
+import { AuthService } from './auth.service.js';
 
-enum AuthMode {
-  local = 'local',
-  remote = 'remote',
-}
+export function createAuthMiddleware(mcpServerId: string) {
+  const authService = new AuthService(mcpServerId);
 
-const AUTH_MODE = process.env.AUTH_MODE || AuthMode.local;
+  return async function validateAuth(req: Request, res: Response, next: NextFunction) {
+    const apiKey = req.query.apiKey as string;
+    
+    if (!apiKey) {
+      return res.status(401).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32001,
+          message: 'Unauthorized: Missing API key',
+        },
+        id: null,
+      });
+    }
 
-export function createAuthMiddleware(_: string) {
-  if (AUTH_MODE === AuthMode.remote) {
-    return function remoteAuth(req: Request, res: Response, next: NextFunction) {
-      const apiKey = req.query.apiKey as string;
-      if (!apiKey) {
-        return res.status(401).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32001,
-            message: 'Unauthorized: Missing API key',
-          },
-          id: null,
-        });
-      }
-      // API key presence is checked, but no implementation details are exposed
-      next();
-    };
-  } else {
-    // Local mode: set externalApiKey from env if present
-    return function localAuth(req: Request, res: Response, next: NextFunction) {
-      const localApiKey = process.env.MCPDOOR_LOCAL_API_KEY;
-      if (localApiKey) {
-        (req as any).externalApiKey = localApiKey;
-      }
-      next();
-    };
+    // Validate the API key (returns ext_api_key or null)
+    const externalApiKey = await authService.validateApiKey(apiKey);
+    
+    // If the API key is invalid (not found or expired or over rate limit), fail
+    if (externalApiKey === undefined) {
+      return res.status(401).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32001,
+          message: 'Unauthorized: Invalid API key',
+        },
+        id: null,
+      });
+    }
+
+    // Only set externalApiKey if present (for providers like Google Maps)
+    if (externalApiKey) {
+      (req as any).externalApiKey = externalApiKey;
+    }
+    next();
   }
 } 
