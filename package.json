@@ -1,0 +1,30 @@
+{
+  "name": "@mcpdoor/servers",
+  "version": "1.0.0",
+  "description": "Collection of MCP door",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "src/google-maps",
+    "src/brave-search",
+    "src/airtable"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspaces",
+    "check": "npx @biomejs/biome check --write --unsafe .",
+    "check:ci": "npx @biomejs/biome check .",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.4",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.13",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.50.5",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0"
+  }
+}
