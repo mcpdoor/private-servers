@@ -11,7 +11,8 @@ interface ApiKey {
   usage_count: number;
   active: boolean;
   rate_limit: number;
-  ext_api_key: string;
+  ext_api_key: string | null;
+  ext_api_key_iv: string | null;
   mcp_server_id: string;
 }
 
@@ -20,6 +21,7 @@ export class AuthService {
   private apiKeysCache: Map<string, ApiKey> = new Map();
   private initialized = false;
   private mcpServerId: string;
+  private encryptionKey: Uint8Array;
 
   constructor(mcpServerId: string) {
     this.supabase = createClient(
@@ -27,12 +29,19 @@ export class AuthService {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
     this.mcpServerId = mcpServerId;
+
+    const base64Key = process.env.ENCRYPTION_KEY;
+    if (!base64Key) throw new Error("ENCRYPTION_KEY not set");
+
+    this.encryptionKey = Uint8Array.from(atob(base64Key), c => c.charCodeAt(0));
+    if (this.encryptionKey.length !== 32) {
+      throw new Error("ENCRYPTION_KEY must decode to 32 bytes (AES-256)");
+    }
   }
 
   private async initialize() {
     if (this.initialized) return;
 
-    // Initial fetch of all active API keys
     const { data: apiKeys, error } = await this.supabase
       .from('api_keys')
       .select('*')
@@ -44,10 +53,8 @@ export class AuthService {
       return;
     }
 
-    // Populate cache
     apiKeys.forEach(key => this.apiKeysCache.set(key.key, key));
 
-    // Subscribe to changes
     this.supabase
       .channel('api_keys_changes')
       .on(
@@ -76,26 +83,38 @@ export class AuthService {
     this.initialized = true;
   }
 
+  private async decryptExtApiKey(ciphertext: string, iv: string): Promise<string> {
+    const ctBytes = Uint8Array.from(atob(ciphertext), c => c.charCodeAt(0));
+    const ivBytes = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
+
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      this.encryptionKey,
+      { name: 'AES-GCM' },
+      false,
+      ['decrypt']
+    );
+
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: ivBytes },
+      cryptoKey,
+      ctBytes
+    );
+
+    return new TextDecoder().decode(decryptedBuffer);
+  }
+
   async validateApiKey(apiKey: string): Promise<string | null> {
     try {
       await this.initialize();
 
       const keyData = this.apiKeysCache.get(apiKey);
-      if (!keyData) {
-        return null;
-      }
+      if (!keyData) return null;
 
-      // Check if key is expired
-      if (keyData.expires_at && new Date(keyData.expires_at) < new Date()) {
-        return null;
-      }
+      if (keyData.expires_at && new Date(keyData.expires_at) < new Date()) return null;
 
-      // Check rate limit
-      if (keyData.usage_count >= keyData.rate_limit) {
-        return null;
-      }
+      if (keyData.usage_count >= keyData.rate_limit) return null;
 
-      // Update usage statistics
       await this.supabase
         .from('api_keys')
         .update({
@@ -104,10 +123,14 @@ export class AuthService {
         })
         .eq('id', keyData.id);
 
-      return keyData.ext_api_key;
+      if (keyData.ext_api_key && keyData.ext_api_key_iv) {
+        return await this.decryptExtApiKey(keyData.ext_api_key, keyData.ext_api_key_iv);
+      }
+
+      return null;
     } catch (error) {
       console.error('Error validating API key:', error);
       return null;
     }
   }
-} 
+}
