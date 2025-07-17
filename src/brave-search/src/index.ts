@@ -8,7 +8,6 @@ import { InMemoryEventStore } from '@modelcontextprotocol/sdk/examples/shared/in
 import { z } from 'zod';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { BraveSearchService } from './service.js';
-import { Request, Response, NextFunction } from 'express';
 import { createAuthMiddleware } from '../../middleware/auth.middleware.js';
 import { AuthService } from '../../middleware/auth.service.js';
 import dotenv from 'dotenv';
