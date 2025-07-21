@@ -73,9 +73,12 @@ export class AuthService {
           if (payload.eventType === 'DELETE') {
             keyData = payload.old as ApiKey;
             if (keyData) {
+              const cached = this.apiKeysById.get(keyData.id);
+              if (cached) {
+                this.apiKeysByKey.delete(cached.key);
+              }
               this.apiKeysById.delete(keyData.id);
-              this.apiKeysByKey.delete(keyData.key);
-              console.log(`API key deleted: id=${keyData.id}, key=${keyData.key}`);
+              console.log(`API key deleted: id=${keyData.id}, key=${cached ? cached.key : 'unknown'}`);
             }
           } else {
             keyData = payload.new as ApiKey;
@@ -123,6 +126,7 @@ export class AuthService {
     try {
       await this.initialize();
 
+      console.log(this.apiKeysByKey);
       const keyData = this.apiKeysByKey.get(apiKey);
       if (!keyData) return null;
 
