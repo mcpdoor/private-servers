@@ -68,15 +68,15 @@ export class AuthService {
           console.info(`API key change detected: ${payload.eventType}`, payload);
           const key = payload.new as ApiKey;
           if (payload.eventType === 'DELETE') {
-            console.info(`API key deleted: ${key.key}`);
-            this.apiKeysCache.delete(key.key);
+            console.info(`API key deleted: ${key.id}`);
+            this.apiKeysCache.delete(key.id);
           } else {
             if (key.active) {
-              this.apiKeysCache.set(key.key, key);
-              console.info(`API key updated: ${key.key}`);
+              this.apiKeysCache.set(key.id, key);
+              console.info(`API key updated: ${key.id}`);
             } else {
-              this.apiKeysCache.delete(key.key);
-              console.info(`API key deactivated: ${key.key}`);
+              this.apiKeysCache.delete(key.id);
+              console.info(`API key deactivated: ${key.id}`);
             }
           }
         }
