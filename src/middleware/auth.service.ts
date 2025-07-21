@@ -66,6 +66,7 @@ export class AuthService {
           filter: `mcp_server_id=eq.${this.mcpServerId}`
         },
         (payload) => {
+          console.info(`API key change detected: ${payload.eventType}`, payload);
           const key = payload.new as ApiKey;
           if (payload.eventType === 'DELETE') {
             console.info(`API key deleted: ${key.key}`);
