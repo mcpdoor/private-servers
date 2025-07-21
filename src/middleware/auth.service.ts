@@ -18,7 +18,8 @@ interface ApiKey {
 
 export class AuthService {
   private readonly supabase;
-  private apiKeysCache: Map<string, ApiKey> = new Map();
+  private apiKeysById: Map<string, ApiKey> = new Map();
+  private apiKeysByKey: Map<string, ApiKey> = new Map();
   private initialized = false;
   private mcpServerId: string;
   private encryptionKey: Uint8Array;
@@ -53,7 +54,10 @@ export class AuthService {
       return;
     }
 
-    apiKeys.forEach(key => this.apiKeysCache.set(key.key, key));
+    apiKeys.forEach(key => {
+      this.apiKeysById.set(key.id, key);
+      this.apiKeysByKey.set(key.key, key);
+    });
 
     this.supabase
       .channel('api_keys_changes')
@@ -65,18 +69,26 @@ export class AuthService {
           table: 'api_keys',
         },
         (payload) => {
-          console.info(`API key change detected: ${payload.eventType}`, payload);
-          const key = payload.new as ApiKey;
+          let keyData: ApiKey | undefined;
           if (payload.eventType === 'DELETE') {
-            console.info(`API key deleted: ${key.id}`);
-            this.apiKeysCache.delete(key.id);
+            keyData = payload.old as ApiKey;
+            if (keyData) {
+              this.apiKeysById.delete(keyData.id);
+              this.apiKeysByKey.delete(keyData.key);
+              console.log(`API key deleted: id=${keyData.id}, key=${keyData.key}`);
+            }
           } else {
-            if (key.active) {
-              this.apiKeysCache.set(key.id, key);
-              console.info(`API key updated: ${key.id}`);
-            } else {
-              this.apiKeysCache.delete(key.id);
-              console.info(`API key deactivated: ${key.id}`);
+            keyData = payload.new as ApiKey;
+            if (keyData) {
+              if (keyData.active) {
+                this.apiKeysById.set(keyData.id, keyData);
+                this.apiKeysByKey.set(keyData.key, keyData);
+                console.log(`API key updated: id=${keyData.id}, key=${keyData.key}`);
+              } else {
+                this.apiKeysById.delete(keyData.id);
+                this.apiKeysByKey.delete(keyData.key);
+                console.log(`API key deactivated: id=${keyData.id}, key=${keyData.key}`);
+              }
             }
           }
         }
@@ -111,7 +123,7 @@ export class AuthService {
     try {
       await this.initialize();
 
-      const keyData = this.apiKeysCache.get(apiKey);
+      const keyData = this.apiKeysByKey.get(apiKey);
       if (!keyData) return null;
 
       if (keyData.expires_at && new Date(keyData.expires_at) < new Date()) return null;
