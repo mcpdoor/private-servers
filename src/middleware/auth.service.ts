@@ -63,7 +63,6 @@ export class AuthService {
           event: '*',
           schema: 'public',
           table: 'api_keys',
-          filter: `mcp_server_id=eq.${this.mcpServerId}`
         },
         (payload) => {
           console.info(`API key change detected: ${payload.eventType}`, payload);
